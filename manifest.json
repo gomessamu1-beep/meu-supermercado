@@ -1,0 +1,10 @@
+{
+  "name": "Meu Supermercado",
+  "short_name": "Meu Mercado",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f4f7f4",
+  "theme_color": "#14532d",
+  "description": "Lista e controle das compras do supermercado",
+  "icons": []
+}
