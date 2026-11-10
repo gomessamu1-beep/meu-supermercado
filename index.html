@@ -276,30 +276,53 @@ window.deleteProduct=async id=>{
 };
 function closeProductEditor(){editingProductId=null;$('productEditor').classList.add('hidden')}
 $('cancelProductEditBtn').onclick=closeProductEditor;
+function normalizeProductText(value){
+ return String(value||'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().replace(/\\s+/g,' ').trim();
+}
 $('saveProductBtn').onclick=async()=>{
- const name=$('editProductName').value.trim(),barcode=$('editProductBarcode').value.trim()||null;
+ const name=$('editProductName').value.trim(),barcode=$('editProductBarcode').value.trim().replace(/\\D/g,'')||null;
+ const brand=$('editProductBrand').value.trim()||null;
  if(!name){$('productEditorMsg').textContent='Informe o nome do produto.';return}
- const data={user_id:user.id,name,barcode,brand:$('editProductBrand').value.trim()||null,category:$('editProductCategory').value.trim()||null,image_url:$('editProductImage').value.trim()||null};
- let r;
- if(editingProductId){
-  r=await db.from('products').update({name,barcode,brand:data.brand,category:data.category,image_url:data.image_url}).eq('id',editingProductId).eq('user_id',user.id);
- }else{
-  if(barcode){
-   const exists=await db.from('products').select('id').eq('user_id',user.id).eq('barcode',barcode).maybeSingle();
-   if(exists.error){$('productEditorMsg').textContent='Erro ao verificar código: '+exists.error.message;return}
-   if(exists.data){$('productEditorMsg').textContent='Já existe um produto cadastrado com este código de barras. Use Editar na lista.';return}
+ const data={user_id:user.id,name,barcode,brand,category:$('editProductCategory').value.trim()||null,image_url:$('editProductImage').value.trim()||null};
+ $('saveProductBtn').disabled=true;
+ $('productEditorMsg').textContent='Verificando se o produto já está cadastrado...';
+ try{
+  const check=await db.from('products').select('id,name,brand,barcode').eq('user_id',user.id);
+  if(check.error){$('productEditorMsg').textContent='Erro ao verificar produtos existentes: '+check.error.message;return}
+  const normalizedName=normalizeProductText(name),normalizedBrand=normalizeProductText(brand);
+  const duplicate=(check.data||[]).find(p=>{
+   if(editingProductId&&String(p.id)===String(editingProductId))return false;
+   const existingBarcode=String(p.barcode||'').replace(/\\D/g,'');
+   const sameBarcode=!!barcode&&!!existingBarcode&&existingBarcode===barcode;
+   const existingBrand=normalizeProductText(p.brand);
+   const sameName=normalizeProductText(p.name)===normalizedName;
+   const sameBrand=existingBrand===normalizedBrand;
+   return sameBarcode||(sameName&&(sameBrand||!normalizedBrand||!existingBrand));
+  });
+  if(duplicate){
+   $('productEditorMsg').textContent='Este produto já está cadastrado'+(duplicate.brand?' ('+duplicate.brand+')':'')+'. Não foi criado outro registro. Use Editar na lista para alterar o cadastro existente.';
+   return;
   }
-  r=await db.from('products').insert(data);
+  let r;
+  if(editingProductId){
+   r=await db.from('products').update({name,barcode,brand,category:data.category,image_url:data.image_url}).eq('id',editingProductId).eq('user_id',user.id);
+  }else{
+   r=await db.from('products').insert(data);
+  }
+  if(r.error){$('productEditorMsg').textContent='Erro ao salvar: '+r.error.message;return}
+  const wasEditing=!!editingProductId;
+  editingProductId=null;
+  $('productSearch').value='';
+  await loadProducts();
+  $('productEditor').classList.add('hidden');
+  $('productEditorTitle').textContent='Cadastrar produto';
+  $('saveProductBtn').textContent='Cadastrar produto';
+  $('productEditorMsg').textContent=wasEditing?'Produto atualizado com sucesso!':'Produto cadastrado com sucesso!';
+ }catch(error){
+  $('productEditorMsg').textContent='Não foi possível verificar/salvar o produto: '+(error.message||error);
+ }finally{
+  $('saveProductBtn').disabled=false;
  }
- if(r.error){$('productEditorMsg').textContent='Erro ao salvar: '+r.error.message;return}
- const wasEditing=!!editingProductId;
- editingProductId=null;
- await loadProducts();
- $('productEditor').classList.add('hidden');
- $('productEditorTitle').textContent='Cadastrar produto';
- $('saveProductBtn').textContent='Cadastrar produto';
- $('productSearch').value='';
- $('productEditorMsg').textContent=wasEditing?'Produto atualizado com sucesso!':'Produto cadastrado com sucesso!';
 };
 $('productSearch').oninput=()=>loadProducts();
 async function loadHistory(){
