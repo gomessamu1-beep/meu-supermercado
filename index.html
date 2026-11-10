@@ -351,8 +351,18 @@ async function searchProductImages(){
    btn.textContent='Foto selecionada';
   }));
  }catch(error){
-  const message=error?.message||String(error);
-  status.textContent=message.includes('BRAVE_SEARCH_API_KEY')?'A busca está pronta, mas falta adicionar a chave da pesquisa no Supabase.':('Falha na pesquisa: '+message);
+  let detail=error?.message||String(error);
+  try{
+   const response=error?.context;
+   if(response&&typeof response.clone==='function'){
+    const body=await response.clone().json();
+    if(body?.error)detail=body.error;
+    else if(body?.message)detail=body.message;
+   }
+  }catch(parseError){}
+  if(detail.includes('BRAVE_SEARCH_API_KEY'))status.textContent='Falta configurar a chave BRAVE_SEARCH_API_KEY nos Secrets do Supabase.';
+  else if(/401|unauthorized|jwt|token/i.test(detail))status.textContent='A sessão de acesso expirou ou não foi validada. Saia e entre novamente no aplicativo.';
+  else status.textContent='Falha na pesquisa: '+detail;
  }finally{button.disabled=false}
 }
 $('searchProductImagesBtn').onclick=searchProductImages;
