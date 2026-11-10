@@ -79,7 +79,7 @@ footer{text-align:center;color:#94a3b8;font-size:11px;padding:14px}
 <div class="field"><label>Categoria</label><input id="editProductCategory" placeholder="Categoria"></div>
 <div class="field wide"><label>Código de barras</label><input id="editProductBarcode" inputmode="numeric" placeholder="Código de barras"></div>
 <div class="field wide"><label>Link da foto (URL)</label><input id="editProductImage" placeholder="https://..."></div>
-<div class="field wide"><button type="button" class="secondary" id="searchProductImagesBtn">Buscar fotos nas lojas online</button><div id="imageSearchStatus" class="lookup-status muted"></div><div id="marketplaceSearchLinks" class="actions" style="margin-top:8px"></div><div id="imageSearchResults" class="image-results"></div></div>
+<div class="field wide"><button type="button" class="secondary" id="searchProductImagesBtn">Buscar fotos nas lojas online</button><div id="imageSearchStatus" class="lookup-status muted"></div><div id="imageSearchResults" class="image-results"></div></div>
 </div>
 <div class="actions" style="margin-top:10px"><button id="saveProductBtn">Cadastrar produto</button><button class="secondary" id="cancelProductEditBtn">Cancelar</button></div>
 <div id="productEditorMsg" class="muted" style="margin-top:8px"></div>
@@ -331,24 +331,22 @@ async function searchProductImages(){
  const name=$('editProductName').value.trim();
  const brand=$('editProductBrand').value.trim();
  const barcode=$('editProductBarcode').value.replace(/\D/g,'');
- const status=$('imageSearchStatus'),results=$('imageSearchResults'),button=$('searchProductImagesBtn'),links=$('marketplaceSearchLinks');
+ const status=$('imageSearchStatus'),results=$('imageSearchResults'),button=$('searchProductImagesBtn');
  if(!name&&!barcode){status.textContent='Informe o nome ou o código de barras do produto.';return}
- const query=[barcode,name,brand].filter(Boolean).join(' ').trim();
- const encoded=encodeURIComponent(query);
- links.innerHTML=[
-  ['Amazon','https://www.amazon.com.br/s?k='+encoded],
-  ['Shopee','https://shopee.com.br/search?keyword='+encoded],
-  ['Magalu','https://www.magazineluiza.com.br/busca/'+encoded+'/']
- ].map(([label,url])=>'<a href="'+safe(url)+'" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:8px 11px;border-radius:9px;background:#e8f1eb;color:#14532d;font-size:12px;font-weight:700;text-decoration:none">'+label+'</a>').join('');
- button.disabled=true;status.textContent='Consultando anúncios e fotos no Mercado Livre...';results.innerHTML='';
+ button.disabled=true;
+ status.textContent='Buscando produtos e fotos no Mercado Livre...';
+ results.innerHTML='';
  try{
   const {data,error}=await db.functions.invoke('product-image-search',{body:{name,brand,barcode}});
   if(error)throw error;
   if(data?.error)throw new Error(data.error);
   searchedProductImages=(data?.results||[]).filter(x=>x.imageUrl&&/^https?:\/\//i.test(x.imageUrl));
-  if(!searchedProductImages.length){status.textContent='Nenhuma foto encontrada no Mercado Livre. Você ainda pode pesquisar nas outras lojas pelos botões acima.';return}
-  status.textContent=searchedProductImages.length+' anúncio(s) com foto encontrados no Mercado Livre. Amazon, Shopee e Magalu estão disponíveis nos links acima.';
-  results.innerHTML=searchedProductImages.map((item,i)=>'<div class="image-result"><img loading="lazy" src="'+safe(item.thumbnail||item.imageUrl)+'" alt="'+safe(item.title)+'"><div class="itemmeta">'+safe(item.title)+'</div><button type="button" data-image-choice="'+i+'">Usar esta foto</button>'+(item.pageUrl?'<a href="'+safe(item.pageUrl)+'" target="_blank" rel="noopener noreferrer">Ver anúncio no Mercado Livre</a>':'')+'</div>').join('');
+  if(!searchedProductImages.length){
+   status.textContent='Nenhum produto com foto foi encontrado no Mercado Livre. Tente outro nome ou código de barras.';
+   return;
+  }
+  status.textContent=searchedProductImages.length+' resultado(s) encontrado(s) no Mercado Livre. Escolha a foto correta.';
+  results.innerHTML=searchedProductImages.map((item,i)=>'<div class="image-result"><img loading="lazy" src="'+safe(item.thumbnail||item.imageUrl)+'" alt="'+safe(item.title)+'"><div class="itemmeta">'+safe(item.title)+'</div><button type="button" data-image-choice="'+i+'">Usar esta foto</button></div>').join('');
   results.querySelectorAll('[data-image-choice]').forEach(btn=>btn.addEventListener('click',()=>{
    const item=searchedProductImages[Number(btn.dataset.imageChoice)];
    if(!item)return;
@@ -368,7 +366,7 @@ async function searchProductImages(){
    }
   }catch(parseError){}
   if(/401|unauthorized|jwt|token/i.test(detail))status.textContent='A sessão de acesso expirou ou não foi validada. Saia e entre novamente no aplicativo.';
-  else status.textContent='Falha na pesquisa do Mercado Livre: '+detail+'. Você pode usar os links das outras lojas acima.';
+  else status.textContent='Falha na pesquisa do Mercado Livre: '+detail;
  }finally{button.disabled=false}
 }
 $('searchProductImagesBtn').onclick=searchProductImages;
