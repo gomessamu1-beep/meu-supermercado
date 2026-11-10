@@ -277,10 +277,10 @@ window.deleteProduct=async id=>{
 function closeProductEditor(){editingProductId=null;$('productEditor').classList.add('hidden')}
 $('cancelProductEditBtn').onclick=closeProductEditor;
 function normalizeProductText(value){
- return String(value||'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().replace(/\\s+/g,' ').trim();
+ return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
 }
 $('saveProductBtn').onclick=async()=>{
- const name=$('editProductName').value.trim(),barcode=$('editProductBarcode').value.trim().replace(/\\D/g,'')||null;
+ const name=$('editProductName').value.trim(),barcode=$('editProductBarcode').value.trim().replace(/\D/g,'')||null;
  const brand=$('editProductBrand').value.trim()||null;
  if(!name){$('productEditorMsg').textContent='Informe o nome do produto.';return}
  const data={user_id:user.id,name,barcode,brand,category:$('editProductCategory').value.trim()||null,image_url:$('editProductImage').value.trim()||null};
@@ -292,7 +292,7 @@ $('saveProductBtn').onclick=async()=>{
   const normalizedName=normalizeProductText(name),normalizedBrand=normalizeProductText(brand);
   const duplicate=(check.data||[]).find(p=>{
    if(editingProductId&&String(p.id)===String(editingProductId))return false;
-   const existingBarcode=String(p.barcode||'').replace(/\\D/g,'');
+   const existingBarcode=String(p.barcode||'').replace(/\D/g,'');
    const sameBarcode=!!barcode&&!!existingBarcode&&existingBarcode===barcode;
    const existingBrand=normalizeProductText(p.brand);
    const sameName=normalizeProductText(p.name)===normalizedName;
