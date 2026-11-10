@@ -69,9 +69,9 @@ footer{text-align:center;color:#94a3b8;font-size:11px;padding:14px}
 <div class="panel"><h2>Itens da compra</h2><div id="listItems"><p class="muted">Carregando lista...</p></div><div class="row"><strong>Total previsto</strong><strong class="total" id="listTotal">R$ 0,00</strong></div></div>
 </section>
 <section id="tab-produtos" class="hidden">
-<div class="panel"><h2>Cadastro de produtos</h2><div class="grid"><div class="field wide"><label>Buscar produto ou código</label><input id="productSearch" placeholder="Digite nome ou código de barras"></div></div><div id="productsList" style="margin-top:10px"></div>
+<div class="panel"><div class="row" style="align-items:center;justify-content:space-between;gap:10px"><h2>Cadastro de produtos</h2><button id="newProductBtn">+ Novo produto</button></div><p class="muted">Cadastre produtos mesmo que ainda não tenham sido incluídos em uma compra.</p><div class="grid"><div class="field wide"><label>Buscar produto ou código</label><input id="productSearch" placeholder="Digite nome ou código de barras"></div></div><div id="productsList" style="margin-top:10px"></div>
 <div id="productEditor" class="panel hidden" style="margin-top:14px;background:#f8fbf8">
-<h3 id="productEditorTitle">Editar produto</h3>
+<h3 id="productEditorTitle">Cadastrar produto</h3>
 <div class="grid">
 <div class="field wide"><label>Nome do produto</label><input id="editProductName" placeholder="Nome do produto"></div>
 <div class="field"><label>Marca</label><input id="editProductBrand" placeholder="Marca"></div>
@@ -79,7 +79,7 @@ footer{text-align:center;color:#94a3b8;font-size:11px;padding:14px}
 <div class="field wide"><label>Código de barras</label><input id="editProductBarcode" inputmode="numeric" placeholder="Código de barras"></div>
 <div class="field wide"><label>Link da foto (URL)</label><input id="editProductImage" placeholder="https://..."></div>
 </div>
-<div class="actions" style="margin-top:10px"><button id="saveProductBtn">Salvar alterações</button><button class="secondary" id="cancelProductEditBtn">Cancelar</button></div>
+<div class="actions" style="margin-top:10px"><button id="saveProductBtn">Cadastrar produto</button><button class="secondary" id="cancelProductEditBtn">Cancelar</button></div>
 <div id="productEditorMsg" class="muted" style="margin-top:8px"></div>
 </div>
 </div>
@@ -244,6 +244,16 @@ async function loadProducts(){
  const r=await q;if(r.error){$('productsList').textContent=r.error.message;return}products=r.data||[];
  $('productsList').innerHTML=products.length?products.map(p=>'<div class="row">'+(p.image_url?'<img class="product-thumb" src="'+safe(p.image_url)+'" alt="Foto de '+safe(p.name)+'">':'<div class="product-thumb" style="display:grid;place-items:center;color:#94a3b8">📦</div>')+'<div style="flex:1;min-width:0"><div class="rowname">'+safe(p.name)+'</div><div class="itemmeta">'+safe(p.barcode||'Sem código')+(p.brand?' · '+safe(p.brand):'')+(p.category?' · '+safe(p.category):'')+'</div></div><div class="actions" style="flex-wrap:nowrap"><button class="secondary" style="padding:7px 10px" onclick="editProduct(\''+p.id+'\')">Editar</button><button class="danger" style="padding:7px 10px" onclick="deleteProduct(\''+p.id+'\')">Excluir</button></div></div>').join(''):'<p class="muted">Nenhum produto cadastrado ainda. Os produtos adicionados às listas aparecem aqui.</p>';
 }
+window.newProduct=()=>{
+ editingProductId=null;
+ ['editProductName','editProductBrand','editProductCategory','editProductBarcode','editProductImage'].forEach(id=>$(id).value='');
+ $('productEditorTitle').textContent='Cadastrar produto';
+ $('saveProductBtn').textContent='Cadastrar produto';
+ $('productEditorMsg').textContent='Preencha os dados do produto. O código de barras e a foto são opcionais.';
+ $('productEditor').classList.remove('hidden');
+ $('productEditor').scrollIntoView({behavior:'smooth',block:'center'});
+};
+$('newProductBtn').onclick=window.newProduct;
 window.editProduct=id=>{
  const p=products.find(x=>x.id===id);if(!p)return;
  editingProductId=id;
@@ -251,6 +261,7 @@ window.editProduct=id=>{
  $('editProductCategory').value=p.category||'';$('editProductBarcode').value=p.barcode||'';
  $('editProductImage').value=p.image_url||'';
  $('productEditorTitle').textContent='Editar produto';
+ $('saveProductBtn').textContent='Salvar alterações';
  $('productEditorMsg').textContent='';
  $('productEditor').classList.remove('hidden');
  $('productEditor').scrollIntoView({behavior:'smooth',block:'center'});
@@ -266,16 +277,29 @@ window.deleteProduct=async id=>{
 function closeProductEditor(){editingProductId=null;$('productEditor').classList.add('hidden')}
 $('cancelProductEditBtn').onclick=closeProductEditor;
 $('saveProductBtn').onclick=async()=>{
- if(!editingProductId)return;
  const name=$('editProductName').value.trim(),barcode=$('editProductBarcode').value.trim()||null;
  if(!name){$('productEditorMsg').textContent='Informe o nome do produto.';return}
- const data={name,barcode,brand:$('editProductBrand').value.trim()||null,category:$('editProductCategory').value.trim()||null,image_url:$('editProductImage').value.trim()||null};
- const r=await db.from('products').update(data).eq('id',editingProductId).eq('user_id',user.id);
+ const data={user_id:user.id,name,barcode,brand:$('editProductBrand').value.trim()||null,category:$('editProductCategory').value.trim()||null,image_url:$('editProductImage').value.trim()||null};
+ let r;
+ if(editingProductId){
+  r=await db.from('products').update({name,barcode,brand:data.brand,category:data.category,image_url:data.image_url}).eq('id',editingProductId).eq('user_id',user.id);
+ }else{
+  if(barcode){
+   const exists=await db.from('products').select('id').eq('user_id',user.id).eq('barcode',barcode).maybeSingle();
+   if(exists.error){$('productEditorMsg').textContent='Erro ao verificar código: '+exists.error.message;return}
+   if(exists.data){$('productEditorMsg').textContent='Já existe um produto cadastrado com este código de barras. Use Editar na lista.';return}
+  }
+  r=await db.from('products').insert(data);
+ }
  if(r.error){$('productEditorMsg').textContent='Erro ao salvar: '+r.error.message;return}
- $('productEditorMsg').textContent='Produto atualizado com sucesso!';
- const editedId=editingProductId;editingProductId=null;
+ const wasEditing=!!editingProductId;
+ editingProductId=null;
  await loadProducts();
  $('productEditor').classList.add('hidden');
+ $('productEditorTitle').textContent='Cadastrar produto';
+ $('saveProductBtn').textContent='Cadastrar produto';
+ $('productSearch').value='';
+ $('productEditorMsg').textContent=wasEditing?'Produto atualizado com sucesso!':'Produto cadastrado com sucesso!';
 };
 $('productSearch').oninput=()=>loadProducts();
 async function loadHistory(){
