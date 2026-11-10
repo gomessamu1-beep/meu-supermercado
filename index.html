@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#123b2a"><title>Meu Supermercado</title>
+<link rel="manifest" href="manifest.json">
+<style>
+:root{--green:#14532d;--green2:#16a34a;--ink:#17231c;--muted:#64748b;--bg:#f4f7f4;--line:#e2e8e2;--white:#fff;--red:#dc2626}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial;color:var(--ink)}
+header{background:var(--green);color:#fff;padding:18px max(16px,calc((100% - 980px)/2));position:sticky;top:0;z-index:5;box-shadow:0 3px 12px #0002}
+.brand{font-size:21px;font-weight:800;letter-spacing:-.5px}.sub{font-size:12px;opacity:.8;margin-top:2px}
+main{max-width:980px;margin:auto;padding:18px 14px 48px}.panel{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px;box-shadow:0 2px 8px #0f172a08}
+h2{font-size:17px;margin:0 0 12px}h3{font-size:14px;margin:0 0 8px}.muted{color:var(--muted);font-size:13px}
+input,select,button{font:inherit}input,select{width:100%;padding:12px;border:1px solid #cbd5d0;border-radius:10px;background:#fff;color:var(--ink);min-width:0}
+label{display:block;font-size:12px;color:#475569;font-weight:650;margin:0 0 5px}.field{min-width:0}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.grid .wide{grid-column:1/-1}
+button{border:0;border-radius:10px;padding:11px 14px;font-weight:700;cursor:pointer;background:var(--green);color:#fff}
+button.secondary{background:#e8f1eb;color:var(--green)}button.danger{background:#fee2e2;color:#991b1b}button:disabled{opacity:.5;cursor:not-allowed}
+.actions{display:flex;gap:8px;flex-wrap:wrap}.tabs{display:flex;gap:7px;overflow:auto;margin:0 0 14px;padding-bottom:3px}.tabs button{white-space:nowrap;background:#e6eee8;color:#28533a}.tabs button.active{background:var(--green);color:#fff}
+.row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--line)}.row:last-child{border:0}.rowname{font-weight:650;font-size:14px}.price{font-weight:800;white-space:nowrap}
+.total{font-size:25px;font-weight:850;color:var(--green)}.statgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.stat{background:#f0f7f1;border-radius:12px;padding:13px}.stat small{display:block;color:var(--muted);font-size:12px}.stat strong{font-size:20px;color:var(--green)}
+.hidden{display:none!important}.notice{padding:11px;border-radius:10px;background:#eff6ff;color:#1e40af;font-size:13px;margin-bottom:12px}.error{background:#fef2f2;color:#991b1b}.success{background:#f0fdf4;color:#166534}
+.itemleft{display:flex;align-items:flex-start;gap:9px;min-width:0}.itemleft input{width:18px;margin-top:3px}.itemmeta{font-size:12px;color:var(--muted);margin-top:3px}.strike{text-decoration:line-through;color:#94a3b8}
+#scannerBox{width:100%;min-height:180px;background:#0f172a;border-radius:12px;color:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden;margin:10px 0}
+footer{text-align:center;color:#94a3b8;font-size:11px;padding:14px}
+@media(max-width:560px){main{padding:12px 10px 35px}.panel{padding:13px;border-radius:13px}.grid{grid-template-columns:1fr 1fr}.brand{font-size:19px}.actions button{flex:1}.total{font-size:22px}}
+</style>
+</head>
+<body>
+<header><div class="brand">🛒 Meu Supermercado</div><div class="sub">Sua lista, seus gastos e seus preços em um só lugar</div></header>
+<main>
+<section id="authPanel" class="panel">
+<h2>Acesse sua conta</h2><p class="muted">Crie uma conta ou entre para sincronizar suas compras na nuvem.</p>
+<div class="grid"><div class="field wide"><label>E-mail</label><input id="email" type="email" autocomplete="email" placeholder="seu@email.com"></div><div class="field wide"><label>Senha</label><input id="password" type="password" autocomplete="current-password" placeholder="Mínimo de 6 caracteres"></div></div>
+<div class="actions" style="margin-top:12px"><button id="loginBtn">Entrar</button><button class="secondary" id="signupBtn">Criar conta</button></div>
+<div id="authMsg" class="muted" style="margin-top:10px"></div>
+</section>
+<section id="appPanel" class="hidden">
+<div class="panel statgrid">
+<div class="stat"><small>Total da lista atual</small><strong id="currentTotal">R$ 0,00</strong></div>
+<div class="stat"><small>Itens na lista</small><strong id="itemCount">0</strong></div>
+</div>
+<nav class="tabs">
+<button class="active" data-tab="lista">Minha lista</button><button data-tab="produtos">Produtos</button><button data-tab="historico">Histórico e preços</button><button data-tab="conta">Conta</button>
+</nav>
+<section id="tab-lista">
+<div class="panel">
+<h2>Lista de compras</h2>
+<div class="grid"><div class="field"><label>Nome da lista</label><input id="listName" placeholder="Compra da semana"></div><div class="field"><label>Supermercado</label><input id="storeName" placeholder="Nome da loja"></div></div>
+<div class="actions" style="margin-top:10px"><button id="newListBtn" class="secondary">Nova lista</button><button id="finishBtn">Finalizar compra</button></div>
+</div>
+<div class="panel">
+<h2>Adicionar item</h2>
+<div class="grid">
+<div class="field wide"><label>Produto</label><input id="itemName" placeholder="Ex.: Arroz 5 kg"></div>
+<div class="field"><label>Quantidade</label><input id="itemQty" type="number" min="0.001" step="0.001" value="1"></div>
+<div class="field"><label>Preço unitário (R$)</label><input id="itemPrice" type="number" min="0" step="0.01" placeholder="0,00"></div>
+<div class="field wide"><label>Código de barras (opcional)</label><input id="itemBarcode" inputmode="numeric" placeholder="EAN-13 / EAN-8"></div>
+</div>
+<div class="actions" style="margin-top:10px"><button id="addItemBtn">Adicionar à lista</button><button class="secondary" id="scanBtn">Ler código de barras</button></div>
+<div id="scannerBox" class="hidden">A câmera será ativada aqui</div>
+<div class="muted" id="scanHelp">A leitura usa a câmera do aparelho quando o navegador oferece suporte.</div>
+</div>
+<div class="panel"><h2>Itens da compra</h2><div id="listItems"><p class="muted">Carregando lista...</p></div><div class="row"><strong>Total previsto</strong><strong class="total" id="listTotal">R$ 0,00</strong></div></div>
+</section>
+<section id="tab-produtos" class="hidden">
+<div class="panel"><h2>Cadastro de produtos</h2><div class="grid"><div class="field wide"><label>Buscar produto ou código</label><input id="productSearch" placeholder="Digite nome ou código de barras"></div></div><div id="productsList" style="margin-top:10px"></div></div>
+</section>
+<section id="tab-historico" class="hidden">
+<div class="panel"><h2>Histórico de compras</h2><div id="historyList"><p class="muted">Carregando histórico...</p></div></div>
+<div class="panel"><h2>Comparação de preços</h2><p class="muted">Veja o menor e o maior preço registrado para cada produto nas suas compras finalizadas.</p><div id="priceCompare"></div></div>
+</section>
+<section id="tab-conta" class="hidden"><div class="panel"><h2>Sua conta</h2><p id="userEmail" class="muted"></p><button id="logoutBtn" class="danger">Sair da conta</button></div></section>
+</section>
+<footer>Meu Supermercado · Dados sincronizados com segurança na nuvem</footer>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SUPABASE_URL='https://vpvdzxspixyhgctirlvv.supabase.co';
+const SUPABASE_KEY='sb_publishable_L4GLK_KXtpwU9BlCUMT6hg_nnpqdem4';
+const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+let user=null, currentList=null, items=[], products=[], purchases=[];
+const $=id=>document.getElementById(id);
+const money=v=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const msg=(id,text,error=false)=>{const el=$(id);el.textContent=text;el.className=error?'muted error':'muted success';};
+const safe=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function runAuth(mode){
+ const email=$('email').value.trim(),password=$('password').value;
+ if(!email||password.length<6){msg('authMsg','Informe um e-mail válido e senha com pelo menos 6 caracteres.',true);return}
+ msg('authMsg','Aguarde...');
+ const result=mode==='signup'?await db.auth.signUp({email,password}):await db.auth.signInWithPassword({email,password});
+ if(result.error){msg('authMsg',result.error.message,true);return}
+ if(mode==='signup'&&!result.data.session){msg('authMsg','Conta criada! Confirme seu e-mail e depois entre.');return}
+ await boot();
+}
+$('loginBtn').onclick=()=>runAuth('login');$('signupBtn').onclick=()=>runAuth('signup');
+$('logoutBtn').onclick=async()=>{await db.auth.signOut();location.reload()};
+document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('active',x===b));['lista','produtos','historico','conta'].forEach(t=>$('tab-'+t).classList.toggle('hidden',t!==b.dataset.tab));if(b.dataset.tab==='produtos')loadProducts();if(b.dataset.tab==='historico')loadHistory()});
+async function boot(){
+ const {data:{user:u}}=await db.auth.getUser();user=u;
+ if(!user)return;
+ $('authPanel').classList.add('hidden');$('appPanel').classList.remove('hidden');$('userEmail').textContent=user.email;
+ await loadCurrentList();
+}
+async function loadCurrentList(){
+ let {data,error}=await db.from('shopping_lists').select('*').eq('user_id',user.id).eq('status','open').order('created_at',{ascending:false}).limit(1);
+ if(error){alert(error.message);return}
+ currentList=data?.[0]||null;
+ if(!currentList){const r=await db.from('shopping_lists').insert({user_id:user.id,name:'Minha compra'}).select().single();if(r.error){alert(r.error.message);return}currentList=r.data}
+ $('listName').value=currentList.name||'';$('storeName').value=currentList.store_name||'';
+ await loadItems();
+}
+async function loadItems(){
+ const r=await db.from('shopping_list_items').select('*').eq('user_id',user.id).eq('list_id',currentList.id).order('created_at');
+ if(r.error){alert(r.error.message);return}items=r.data||[];renderItems();
+}
+function renderItems(){
+ $('listItems').innerHTML=items.length?items.map(i=>'<div class="row"><div class="itemleft"><input type="checkbox" '+(i.checked?'checked':'')+' onchange="toggleItem(\''+i.id+'\',this.checked)"><div><div class="rowname '+(i.checked?'strike':'')+'">'+safe(i.name)+'</div><div class="itemmeta">'+Number(i.quantity)+' × '+money(i.unit_price)+'</div></div></div><div style="text-align:right"><div class="price">'+money(i.quantity*i.unit_price)+'</div><button class="danger" style="padding:5px 9px;margin-top:5px" onclick="removeItem(\''+i.id+'\')">Remover</button></div></div>').join(''):'<p class="muted">Sua lista está vazia. Adicione o primeiro produto acima.</p>';
+ const total=items.reduce((s,i)=>s+Number(i.quantity)*Number(i.unit_price),0);$('listTotal').textContent=money(total);$('currentTotal').textContent=money(total);$('itemCount').textContent=items.length;
+}
+window.toggleItem=async(id,checked)=>{const r=await db.from('shopping_list_items').update({checked}).eq('id',id).eq('user_id',user.id);if(r.error)alert(r.error.message);await loadItems()};
+window.removeItem=async id=>{if(!confirm('Remover este item da lista?'))return;const r=await db.from('shopping_list_items').delete().eq('id',id).eq('user_id',user.id);if(r.error)alert(r.error.message);await loadItems()};
+$('addItemBtn').onclick=async()=>{
+ const name=$('itemName').value.trim(),quantity=Number($('itemQty').value||1),unit_price=Number($('itemPrice').value||0),barcode=$('itemBarcode').value.trim();
+ if(!name||quantity<=0||unit_price<0){alert('Informe produto, quantidade e preço válidos.');return}
+ let product_id=null;
+ if(barcode){let p=await db.from('products').select('id').eq('user_id',user.id).eq('barcode',barcode).maybeSingle();if(p.data)product_id=p.data.id}
+ const r=await db.from('shopping_list_items').insert({user_id:user.id,list_id:currentList.id,product_id,barcode:barcode||null,name,quantity,unit_price});
+ if(r.error){alert(r.error.message);return}
+ if(!product_id){await db.from('products').upsert({user_id:user.id,barcode:barcode||null,name},{onConflict:'user_id,barcode',ignoreDuplicates:true})}
+ ['itemName','itemPrice','itemBarcode'].forEach(id=>$(id).value='');$('itemQty').value='1';await loadItems();
+};
+$('newListBtn').onclick=async()=>{
+ if(items.length&&!confirm('Criar uma nova lista? A lista atual continuará salva como aberta.'))return;
+ const name=$('listName').value.trim()||'Minha compra',store_name=$('storeName').value.trim();
+ await db.from('shopping_lists').update({name,store_name}).eq('id',currentList.id).eq('user_id',user.id);
+ const r=await db.from('shopping_lists').insert({user_id:user.id,name:'Nova compra',status:'open'}).select().single();if(r.error){alert(r.error.message);return}currentList=r.data;await loadCurrentList();
+};
+$('listName').onchange=async()=>{if(currentList)await db.from('shopping_lists').update({name:$('listName').value}).eq('id',currentList.id).eq('user_id',user.id)};
+$('storeName').onchange=async()=>{if(currentList)await db.from('shopping_lists').update({store_name:$('storeName').value}).eq('id',currentList.id).eq('user_id',user.id)};
+$('finishBtn').onclick=async()=>{
+ if(!items.length){alert('Adicione itens antes de finalizar.');return}
+ const store_name=$('storeName').value.trim(),total=items.reduce((s,i)=>s+Number(i.quantity)*Number(i.unit_price),0);
+ if(!confirm('Finalizar compra de '+money(total)+'?'))return;
+ const p=await db.from('purchases').insert({user_id:user.id,list_id:currentList.id,store_name:store_name||null,total}).select().single();if(p.error){alert(p.error.message);return}
+ const rows=items.map(i=>({user_id:user.id,purchase_id:p.data.id,product_id:i.product_id,barcode:i.barcode,name:i.name,quantity:i.quantity,unit_price:i.unit_price,subtotal:Number(i.quantity)*Number(i.unit_price)}));
+ const ins=await db.from('purchase_items').insert(rows);if(ins.error){alert(ins.error.message);return}
+ await db.from('shopping_lists').update({status:'completed',completed_at:new Date().toISOString(),store_name}).eq('id',currentList.id).eq('user_id',user.id);
+ alert('Compra salva no histórico!');currentList=null;await loadCurrentList();await loadHistory();
+};
+async function loadProducts(){
+ const term=$('productSearch').value.trim();let q=db.from('products').select('*').eq('user_id',user.id).order('name').limit(100);
+ if(term)q=q.or('name.ilike.%'+term+'%,barcode.ilike.%'+term+'%');
+ const r=await q;if(r.error){$('productsList').textContent=r.error.message;return}products=r.data||[];
+ $('productsList').innerHTML=products.length?products.map(p=>'<div class="row"><div><div class="rowname">'+safe(p.name)+'</div><div class="itemmeta">'+safe(p.barcode||'Sem código')+(p.brand?' · '+safe(p.brand):'')+'</div></div></div>').join(''):'<p class="muted">Nenhum produto cadastrado ainda. Os produtos adicionados às listas aparecem aqui.</p>';
+}
+$('productSearch').oninput=()=>loadProducts();
+async function loadHistory(){
+ const r=await db.from('purchases').select('*,purchase_items(*)').eq('user_id',user.id).order('purchased_at',{ascending:false}).limit(100);
+ if(r.error){$('historyList').textContent=r.error.message;return}purchases=r.data||[];
+ $('historyList').innerHTML=purchases.length?purchases.map(p=>'<div class="row"><div><div class="rowname">'+new Date(p.purchased_at+'T12:00:00').toLocaleDateString('pt-BR')+' · '+safe(p.store_name||'Supermercado')+'</div><div class="itemmeta">'+(p.purchase_items||[]).length+' itens</div></div><strong class="price">'+money(p.total)+'</strong></div>').join(''):'<p class="muted">Suas compras finalizadas aparecerão aqui.</p>';
+ const map={};purchases.forEach(p=>(p.purchase_items||[]).forEach(i=>{const k=i.product_id||i.name;if(!map[k])map[k]={name:i.name,prices:[]};map[k].prices.push(Number(i.unit_price))}));
+ const entries=Object.values(map).sort((a,b)=>a.name.localeCompare(b.name));
+ $('priceCompare').innerHTML=entries.length?entries.map(x=>'<div class="row"><div><div class="rowname">'+safe(x.name)+'</div><div class="itemmeta">'+x.prices.length+' registro(s) · menor '+money(Math.min(...x.prices))+'</div></div><strong class="price">'+money(Math.max(...x.prices))+'</strong></div>').join(''):'<p class="muted">Finalize uma compra para começar a comparar preços. O valor à esquerda é o menor e à direita o maior.</p>';
+}
+let stream=null;
+$('scanBtn').onclick=async()=>{
+ const box=$('scannerBox');box.classList.toggle('hidden');if(box.classList.contains('hidden')){if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;return}
+ if(!('BarcodeDetector'in window)){box.textContent='Este navegador não oferece leitura automática. Digite o código de barras no campo.';return}
+ try{
+  const detector=new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e']});
+  const video=document.createElement('video');video.setAttribute('playsinline','');video.style.width='100%';box.innerHTML='';box.appendChild(video);
+  stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});video.srcObject=stream;await video.play();
+  const scan=async()=>{if(!stream)return;try{const codes=await detector.detect(video);if(codes.length){$('itemBarcode').value=codes[0].rawValue;box.classList.add('hidden');stream.getTracks().forEach(t=>t.stop());stream=null;$('itemName').focus();return}}catch(e){}requestAnimationFrame(scan)};scan();
+ }catch(e){box.textContent='Não foi possível acessar a câmera. Verifique a permissão do navegador e use HTTPS.'}
+};
+db.auth.onAuthStateChange((_event,session)=>{if(session&&!user)boot()});
+(async()=>{const {data:{session}}=await db.auth.getSession();if(session)await boot()})();
+</script>
+</body></html>
