@@ -21,6 +21,10 @@ button.secondary{background:#e8f1eb;color:var(--green)}button.danger{background:
 .hidden{display:none!important}.notice{padding:11px;border-radius:10px;background:#eff6ff;color:#1e40af;font-size:13px;margin-bottom:12px}.error{background:#fef2f2;color:#991b1b}.success{background:#f0fdf4;color:#166534}
 .itemleft{display:flex;align-items:flex-start;gap:9px;min-width:0}.itemleft input{width:18px;margin-top:3px}.itemmeta{font-size:12px;color:var(--muted);margin-top:3px}.strike{text-decoration:line-through;color:#94a3b8}
 #scannerBox{width:100%;min-height:180px;background:#0f172a;border-radius:12px;color:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden;margin:10px 0}
+.product-preview{display:flex;gap:12px;align-items:center;margin-top:12px;padding:10px;border:1px solid var(--line);border-radius:12px;background:#f8fbf8}
+.product-preview img{width:82px;height:82px;object-fit:contain;border-radius:9px;background:#fff}
+.product-thumb{width:48px;height:48px;object-fit:contain;border-radius:8px;background:#fff;border:1px solid var(--line)}
+.lookup-status{font-size:13px;margin-top:8px}
 footer{text-align:center;color:#94a3b8;font-size:11px;padding:14px}
 @media(max-width:560px){main{padding:12px 10px 35px}.panel{padding:13px;border-radius:13px}.grid{grid-template-columns:1fr 1fr}.brand{font-size:19px}.actions button{flex:1}.total{font-size:22px}}
 </style>
@@ -56,9 +60,11 @@ footer{text-align:center;color:#94a3b8;font-size:11px;padding:14px}
 <div class="field"><label>Preço unitário (R$)</label><input id="itemPrice" type="number" min="0" step="0.01" placeholder="0,00"></div>
 <div class="field wide"><label>Código de barras (opcional)</label><input id="itemBarcode" inputmode="numeric" placeholder="EAN-13 / EAN-8"></div>
 </div>
-<div class="actions" style="margin-top:10px"><button id="addItemBtn">Adicionar à lista</button><button class="secondary" id="scanBtn">Ler código de barras</button></div>
+<div class="actions" style="margin-top:10px"><button id="addItemBtn">Adicionar à lista</button><button class="secondary" id="lookupBarcodeBtn">Buscar produto</button><button class="secondary" id="scanBtn">Ler código de barras</button></div>
 <div id="scannerBox" class="hidden">A câmera será ativada aqui</div>
-<div class="muted" id="scanHelp">A leitura usa a câmera do aparelho quando o navegador oferece suporte.</div>
+<div class="muted" id="scanHelp">Escaneie ou digite o código e busque o produto na internet para preencher nome, marca e foto.</div>
+<div id="lookupStatus" class="lookup-status muted"></div>
+<div id="productPreview" class="product-preview hidden"><img id="productPreviewImage" alt="Foto do produto"><div><strong id="productPreviewName"></strong><div id="productPreviewBrand" class="itemmeta"></div><div class="itemmeta">Informações encontradas na internet. Confira antes de adicionar.</div></div></div>
 </div>
 <div class="panel"><h2>Itens da compra</h2><div id="listItems"><p class="muted">Carregando lista...</p></div><div class="row"><strong>Total previsto</strong><strong class="total" id="listTotal">R$ 0,00</strong></div></div>
 </section>
@@ -95,6 +101,45 @@ async function runAuth(mode){
 $('loginBtn').onclick=()=>runAuth('login');$('signupBtn').onclick=()=>runAuth('signup');
 $('logoutBtn').onclick=async()=>{await db.auth.signOut();location.reload()};
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('active',x===b));['lista','produtos','historico','conta'].forEach(t=>$('tab-'+t).classList.toggle('hidden',t!==b.dataset.tab));if(b.dataset.tab==='produtos')loadProducts();if(b.dataset.tab==='historico')loadHistory()});
+let foundProduct=null;
+function showProductPreview(product){
+ const preview=$('productPreview');
+ if(!product){preview.classList.add('hidden');return}
+ $('productPreviewName').textContent=product.name||'Produto encontrado';
+ $('productPreviewBrand').textContent=product.brand||'';
+ const img=$('productPreviewImage');
+ if(product.image_url){img.src=product.image_url;img.style.display='block'}else{img.removeAttribute('src');img.style.display='none'}
+ preview.classList.remove('hidden');
+}
+async function lookupBarcode(){
+ const barcode=$('itemBarcode').value.replace(/\D/g,'');
+ if(barcode.length<8){$('lookupStatus').textContent='Digite ou escaneie um código de barras válido.';return}
+ $('itemBarcode').value=barcode;
+ $('lookupStatus').textContent='Consultando a base de produtos...';
+ foundProduct=null;
+ try{
+  const url='https://world.openfoodfacts.org/api/v3/product/'+encodeURIComponent(barcode)+'?fields=code,product_name,product_name_pt,product_name_en,brands,categories,image_front_url,image_url,selected_images,quantity';
+  const response=await fetch(url,{headers:{Accept:'application/json'}});
+  if(!response.ok)throw new Error('A consulta não respondeu. Tente novamente.');
+  const data=await response.json();
+  const p=data.product;
+  if(!p||data.status==='failure'||data.status===0){
+   $('lookupStatus').textContent='Produto não encontrado na base online. Você pode preencher o cadastro manualmente.';
+   showProductPreview(null);return;
+  }
+  const image=p.image_front_url||p.image_url||p.selected_images?.front?.display?.pt||p.selected_images?.front?.display?.en||p.selected_images?.front?.display?.['xx'];
+  const name=p.product_name_pt||p.product_name||p.product_name_en||p.generic_name_pt||p.generic_name||'';
+  foundProduct={barcode,name,brand:(p.brands||'').split(',')[0].trim(),category:(p.categories||'').split(',')[0].trim(),image_url:image||null};
+  if(name)$('itemName').value=name;
+  showProductPreview(foundProduct);
+  $('lookupStatus').textContent=name?'Produto localizado! Confira os dados e adicione à lista.':'Código localizado, mas sem nome cadastrado. Preencha o nome manualmente.';
+ }catch(error){
+  $('lookupStatus').textContent='Não foi possível consultar a internet agora. Verifique a conexão e tente novamente.';
+  showProductPreview(null);
+ }
+}
+$('lookupBarcodeBtn').onclick=lookupBarcode;
+$('itemBarcode').addEventListener('change',()=>{if($('itemBarcode').value.trim())lookupBarcode()});
 async function boot(){
  const {data:{user:u}}=await db.auth.getUser();user=u;
  if(!user)return;
@@ -126,7 +171,12 @@ $('addItemBtn').onclick=async()=>{
  if(barcode){let p=await db.from('products').select('id').eq('user_id',user.id).eq('barcode',barcode).maybeSingle();if(p.data)product_id=p.data.id}
  const r=await db.from('shopping_list_items').insert({user_id:user.id,list_id:currentList.id,product_id,barcode:barcode||null,name,quantity,unit_price});
  if(r.error){alert(r.error.message);return}
- if(!product_id){await db.from('products').upsert({user_id:user.id,barcode:barcode||null,name},{onConflict:'user_id,barcode',ignoreDuplicates:true})}
+ if(barcode){
+  const productData={user_id:user.id,barcode,name,brand:foundProduct?.barcode===barcode?foundProduct.brand||null:null,category:foundProduct?.barcode===barcode?foundProduct.category||null:null,image_url:foundProduct?.barcode===barcode?foundProduct.image_url:null};
+  const saved=await db.from('products').upsert(productData,{onConflict:'user_id,barcode'}).select('id').maybeSingle();
+  if(!product_id&&saved.data?.id)product_id=saved.data.id;
+ }
+ foundProduct=null;showProductPreview(null);$('lookupStatus').textContent='';
  ['itemName','itemPrice','itemBarcode'].forEach(id=>$(id).value='');$('itemQty').value='1';await loadItems();
 };
 $('newListBtn').onclick=async()=>{
@@ -151,7 +201,7 @@ async function loadProducts(){
  const term=$('productSearch').value.trim();let q=db.from('products').select('*').eq('user_id',user.id).order('name').limit(100);
  if(term)q=q.or('name.ilike.%'+term+'%,barcode.ilike.%'+term+'%');
  const r=await q;if(r.error){$('productsList').textContent=r.error.message;return}products=r.data||[];
- $('productsList').innerHTML=products.length?products.map(p=>'<div class="row"><div><div class="rowname">'+safe(p.name)+'</div><div class="itemmeta">'+safe(p.barcode||'Sem código')+(p.brand?' · '+safe(p.brand):'')+'</div></div></div>').join(''):'<p class="muted">Nenhum produto cadastrado ainda. Os produtos adicionados às listas aparecem aqui.</p>';
+ $('productsList').innerHTML=products.length?products.map(p=>'<div class="row">'+(p.image_url?'<img class="product-thumb" src="'+safe(p.image_url)+'" alt="Foto de '+safe(p.name)+'">':'')+'<div style="flex:1;min-width:0"><div class="rowname">'+safe(p.name)+'</div><div class="itemmeta">'+safe(p.barcode||'Sem código')+(p.brand?' · '+safe(p.brand):'')+(p.category?' · '+safe(p.category):'')+'</div></div></div>').join(''):'<p class="muted">Nenhum produto cadastrado ainda. Os produtos adicionados às listas aparecem aqui.</p>';
 }
 $('productSearch').oninput=()=>loadProducts();
 async function loadHistory(){
@@ -170,7 +220,7 @@ $('scanBtn').onclick=async()=>{
   const detector=new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e']});
   const video=document.createElement('video');video.setAttribute('playsinline','');video.style.width='100%';box.innerHTML='';box.appendChild(video);
   stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});video.srcObject=stream;await video.play();
-  const scan=async()=>{if(!stream)return;try{const codes=await detector.detect(video);if(codes.length){$('itemBarcode').value=codes[0].rawValue;box.classList.add('hidden');stream.getTracks().forEach(t=>t.stop());stream=null;$('itemName').focus();return}}catch(e){}requestAnimationFrame(scan)};scan();
+  const scan=async()=>{if(!stream)return;try{const codes=await detector.detect(video);if(codes.length){$('itemBarcode').value=codes[0].rawValue;box.classList.add('hidden');stream.getTracks().forEach(t=>t.stop());stream=null;await lookupBarcode();$('itemName').focus();return}}catch(e){}requestAnimationFrame(scan)};scan();
  }catch(e){box.textContent='Não foi possível acessar a câmera. Verifique a permissão do navegador e use HTTPS.'}
 };
 db.auth.onAuthStateChange((_event,session)=>{if(session&&!user)boot()});
