@@ -79,7 +79,7 @@ footer{text-align:center;color:#94a3b8;font-size:11px;padding:14px}
 <div class="field"><label>Categoria</label><input id="editProductCategory" placeholder="Categoria"></div>
 <div class="field wide"><label>Código de barras</label><input id="editProductBarcode" inputmode="numeric" placeholder="Código de barras"></div>
 <div class="field wide"><label>Link da foto (URL)</label><input id="editProductImage" placeholder="https://..."></div>
-<div class="field wide"><button type="button" class="secondary" id="searchProductImagesBtn">Buscar fotos nas lojas online</button><div id="imageSearchStatus" class="lookup-status muted"></div><div id="imageSearchResults" class="image-results"></div></div>
+<div class="field wide"><button type="button" class="secondary" id="searchProductImagesBtn">Buscar fotos na Open Food Facts</button><div id="imageSearchStatus" class="lookup-status muted"></div><div id="imageSearchResults" class="image-results"></div></div>
 </div>
 <div class="actions" style="margin-top:10px"><button id="saveProductBtn">Cadastrar produto</button><button class="secondary" id="cancelProductEditBtn">Cancelar</button></div>
 <div id="productEditorMsg" class="muted" style="margin-top:8px"></div>
@@ -92,7 +92,7 @@ footer{text-align:center;color:#94a3b8;font-size:11px;padding:14px}
 </section>
 <section id="tab-conta" class="hidden"><div class="panel"><h2>Sua conta</h2><p id="userEmail" class="muted"></p><button id="logoutBtn" class="danger">Sair da conta</button></div></section>
 </section>
-<footer>Meu Supermercado · Dados sincronizados com segurança na nuvem<br>Pesquisa de produtos: Mercado Livre, Amazon, Shopee e Magalu</footer>
+<footer>Meu Supermercado · Dados sincronizados com segurança na nuvem<br>Pesquisa de produtos: Open Food Facts</footer>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
@@ -334,7 +334,7 @@ async function searchProductImages(){
  const status=$('imageSearchStatus'),results=$('imageSearchResults'),button=$('searchProductImagesBtn');
  if(!name&&!barcode){status.textContent='Informe o nome ou o código de barras do produto.';return}
  button.disabled=true;
- status.textContent='Buscando produtos e fotos no Mercado Livre...';
+ status.textContent='Buscando produtos e fotos na Open Food Facts...';
  results.innerHTML='';
  try{
   const {data,error}=await db.functions.invoke('product-image-search',{body:{name,brand,barcode}});
@@ -342,10 +342,10 @@ async function searchProductImages(){
   if(data?.error)throw new Error(data.error);
   searchedProductImages=(data?.results||[]).filter(x=>x.imageUrl&&/^https?:\/\//i.test(x.imageUrl));
   if(!searchedProductImages.length){
-   status.textContent='Nenhum produto com foto foi encontrado no Mercado Livre. Tente outro nome ou código de barras.';
+   status.textContent='Nenhum produto com foto foi encontrado na Open Food Facts. Tente outro nome ou código de barras.';
    return;
   }
-  status.textContent=searchedProductImages.length+' resultado(s) encontrado(s) no Mercado Livre. Escolha a foto correta.';
+  status.textContent=searchedProductImages.length+' resultado(s) encontrado(s) na Open Food Facts. Escolha a foto correta.';
   results.innerHTML=searchedProductImages.map((item,i)=>'<div class="image-result"><img loading="lazy" src="'+safe(item.thumbnail||item.imageUrl)+'" alt="'+safe(item.title)+'"><div class="itemmeta">'+safe(item.title)+'</div><button type="button" data-image-choice="'+i+'">Usar esta foto</button></div>').join('');
   results.querySelectorAll('[data-image-choice]').forEach(btn=>btn.addEventListener('click',()=>{
    const item=searchedProductImages[Number(btn.dataset.imageChoice)];
@@ -366,7 +366,7 @@ async function searchProductImages(){
    }
   }catch(parseError){}
   if(/401|unauthorized|jwt|token/i.test(detail))status.textContent='A sessão de acesso expirou ou não foi validada. Saia e entre novamente no aplicativo.';
-  else status.textContent='Falha na pesquisa do Mercado Livre: '+detail;
+  else status.textContent='Falha na pesquisa da Open Food Facts: '+detail;
  }finally{button.disabled=false}
 }
 $('searchProductImagesBtn').onclick=searchProductImages;
