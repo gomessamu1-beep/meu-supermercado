@@ -118,7 +118,7 @@ async function lookupBarcode(){
  $('lookupStatus').textContent='Consultando a base de produtos...';
  foundProduct=null;
  try{
-  const url='https://world.openfoodfacts.org/api/v3/product/'+encodeURIComponent(barcode)+'?fields=code,product_name,product_name_pt,product_name_en,brands,categories,image_front_url,image_url,selected_images,quantity';
+  const url='https://world.openfoodfacts.org/api/v3/product/'+encodeURIComponent(barcode)+'?product_type=all&fields=code,product_name,product_name_pt,product_name_en,brands,categories,image_front_url,image_url,selected_images,quantity';
   const response=await fetch(url,{headers:{Accept:'application/json'}});
   if(!response.ok)throw new Error('A consulta não respondeu. Tente novamente.');
   const data=await response.json();
