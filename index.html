@@ -161,7 +161,7 @@ async function lookupBarcode(){
    front.pt?.url,front.en?.url,front.xx?.url,front.url,
    frontRevision?('https://images.openfoodfacts.org/images/products/'+barcode.split('').join('/')+'/front.'+frontRevision+'.400.jpg'):null
   ];
-  const image=imageCandidates.find(v=>typeof v==='string'&&/^https?:\\/\\//i.test(v))||null;
+  const image=imageCandidates.find(v=>typeof v==='string'&&/^https?:\/\//i.test(v))||null;
   const name=p.product_name_pt||p.product_name||p.product_name_en||p.generic_name_pt||p.generic_name||'';
   foundProduct={barcode,name,brand:(p.brands||'').split(',')[0].trim(),category:(p.categories||'').split(',')[0].trim(),image_url:image||null};
   if(name)$('itemName').value=name;
