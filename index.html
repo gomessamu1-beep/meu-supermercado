@@ -113,7 +113,16 @@ async function runAuth(mode){
 }
 $('loginBtn').onclick=()=>runAuth('login');$('signupBtn').onclick=()=>runAuth('signup');
 $('logoutBtn').onclick=async()=>{await db.auth.signOut();location.reload()};
-document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('active',x===b));['lista','produtos','historico','conta'].forEach(t=>$('tab-'+t).classList.toggle('hidden',t!==b.dataset.tab));if(b.dataset.tab==='produtos')loadProducts();if(b.dataset.tab==='historico')loadHistory()});
+function activateTab(tab,save=true){
+ const allowed=['lista','produtos','historico','conta'];
+ if(!allowed.includes(tab))tab='lista';
+ document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('active',x.dataset.tab===tab));
+ allowed.forEach(t=>$('tab-'+t).classList.toggle('hidden',t!==tab));
+ if(save&&user?.id){try{localStorage.setItem('meuSupermercado:lastTab:'+user.id,tab)}catch(e){}}
+ if(tab==='produtos')loadProducts();
+ if(tab==='historico')loadHistory();
+}
+document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>activateTab(b.dataset.tab));
 let foundProduct=null;
 function showProductPreview(product){
  const preview=$('productPreview');
@@ -158,6 +167,9 @@ async function boot(){
  if(!user)return;
  $('authPanel').classList.add('hidden');$('appPanel').classList.remove('hidden');$('userEmail').textContent=user.email;
  await loadCurrentList();
+ let lastTab='lista';
+ try{lastTab=localStorage.getItem('meuSupermercado:lastTab:'+user.id)||'lista'}catch(e){}
+ activateTab(lastTab,false);
 }
 async function loadCurrentList(){
  let {data,error}=await db.from('shopping_lists').select('*').eq('user_id',user.id).eq('status','open').order('created_at',{ascending:false}).limit(1);
