@@ -330,7 +330,7 @@ let searchedProductImages=[];
 async function searchProductImages(){
  const name=$('editProductName').value.trim();
  const brand=$('editProductBrand').value.trim();
- const barcode=$('editProductBarcode').value.replace(/\\D/g,'');
+ const barcode=$('editProductBarcode').value.replace(/\D/g,'');
  const status=$('imageSearchStatus'),results=$('imageSearchResults'),button=$('searchProductImagesBtn'),links=$('marketplaceSearchLinks');
  if(!name&&!barcode){status.textContent='Informe o nome ou o código de barras do produto.';return}
  const query=[barcode,name,brand].filter(Boolean).join(' ').trim();
@@ -345,7 +345,7 @@ async function searchProductImages(){
   const {data,error}=await db.functions.invoke('product-image-search',{body:{name,brand,barcode}});
   if(error)throw error;
   if(data?.error)throw new Error(data.error);
-  searchedProductImages=(data?.results||[]).filter(x=>x.imageUrl&&/^https?:\\/\\//i.test(x.imageUrl));
+  searchedProductImages=(data?.results||[]).filter(x=>x.imageUrl&&/^https?:\/\/i.test(x.imageUrl));
   if(!searchedProductImages.length){status.textContent='Nenhuma foto encontrada no Mercado Livre. Você ainda pode pesquisar nas outras lojas pelos botões acima.';return}
   status.textContent=searchedProductImages.length+' anúncio(s) com foto encontrados no Mercado Livre. Amazon, Shopee e Magalu estão disponíveis nos links acima.';
   results.innerHTML=searchedProductImages.map((item,i)=>'<div class="image-result"><img loading="lazy" src="'+safe(item.thumbnail||item.imageUrl)+'" alt="'+safe(item.title)+'"><div class="itemmeta">'+safe(item.title)+'</div><button type="button" data-image-choice="'+i+'">Usar esta foto</button>'+(item.pageUrl?'<a href="'+safe(item.pageUrl)+'" target="_blank" rel="noopener noreferrer">Ver anúncio no Mercado Livre</a>':'')+'</div>').join('');
