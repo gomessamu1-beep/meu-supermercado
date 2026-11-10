@@ -140,7 +140,8 @@ async function lookupBarcode(){
  $('lookupStatus').textContent='Consultando a base de produtos...';
  foundProduct=null;
  try{
-  const url='https://world.openfoodfacts.org/api/v3/product/'+encodeURIComponent(barcode)+'?product_type=all&fields=code,product_name,product_name_pt,product_name_en,brands,categories,image_front_url,image_url,selected_images,quantity';
+  const fields='code,product_name,product_name_pt,product_name_en,generic_name,generic_name_pt,brands,categories,image_front_url,image_front_small_url,image_url,selected_images,images,quantity';
+  const url='https://world.openfoodfacts.org/api/v3/product/'+encodeURIComponent(barcode)+'?product_type=all&fields='+fields;
   const response=await fetch(url,{headers:{Accept:'application/json'}});
   if(!response.ok)throw new Error('A consulta não respondeu. Tente novamente.');
   const data=await response.json();
@@ -149,7 +150,18 @@ async function lookupBarcode(){
    $('lookupStatus').textContent='Produto não encontrado na base online. Você pode preencher o cadastro manualmente.';
    showProductPreview(null);return;
   }
-  const image=p.image_front_url||p.image_url||p.selected_images?.front?.display?.pt||p.selected_images?.front?.display?.en||p.selected_images?.front?.display?.['xx'];
+  // A base possui fotos em formatos diferentes; tenta todas as imagens frontais disponíveis.
+  const front=p.images?.front||{};
+  const frontRevision=front.rev||front.pt?.rev||front.en?.rev||front.xx?.rev;
+  const imageCandidates=[
+   p.image_front_url,p.image_front_small_url,p.image_url,
+   p.selected_images?.front?.display?.pt,p.selected_images?.front?.display?.en,p.selected_images?.front?.display?.xx,
+   p.selected_images?.front?.small?.pt,p.selected_images?.front?.small?.en,p.selected_images?.front?.small?.xx,
+   p.selected_images?.front?.thumb?.pt,p.selected_images?.front?.thumb?.en,p.selected_images?.front?.thumb?.xx,
+   front.pt?.url,front.en?.url,front.xx?.url,front.url,
+   frontRevision?('https://images.openfoodfacts.org/images/products/'+barcode.split('').join('/')+'/front.'+frontRevision+'.400.jpg'):null
+  ];
+  const image=imageCandidates.find(v=>typeof v==='string'&&/^https?:\\/\\//i.test(v))||null;
   const name=p.product_name_pt||p.product_name||p.product_name_en||p.generic_name_pt||p.generic_name||'';
   foundProduct={barcode,name,brand:(p.brands||'').split(',')[0].trim(),category:(p.categories||'').split(',')[0].trim(),image_url:image||null};
   if(name)$('itemName').value=name;
