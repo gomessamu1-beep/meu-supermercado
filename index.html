@@ -21,6 +21,11 @@ button.secondary{background:#e8f1eb;color:var(--green)}button.danger{background:
 .hidden{display:none!important}.notice{padding:11px;border-radius:10px;background:#eff6ff;color:#1e40af;font-size:13px;margin-bottom:12px}.error{background:#fef2f2;color:#991b1b}.success{background:#f0fdf4;color:#166534}
 .itemleft{display:flex;align-items:flex-start;gap:9px;min-width:0}.itemleft input{width:18px;margin-top:3px}.itemmeta{font-size:12px;color:var(--muted);margin-top:3px}.strike{text-decoration:line-through;color:#94a3b8}
 #scannerBox{width:100%;min-height:180px;background:#0f172a;border-radius:12px;color:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden;margin:10px 0}
+#labelScanner{background:#f8fbf8;border:1px solid var(--line);border-radius:12px;padding:10px;margin-top:10px}
+#labelScanner video{width:100%;max-height:55vh;object-fit:cover;border-radius:9px;background:#0f172a}
+#labelScanner .scan-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:9px}
+#labelScanner .scan-actions button{flex:1}
+#labelScanStatus{font-size:13px;margin-top:8px}
 .product-preview{display:flex;gap:12px;align-items:center;margin-top:12px;padding:10px;border:1px solid var(--line);border-radius:12px;background:#f8fbf8}
 .product-preview img{width:82px;height:82px;object-fit:contain;border-radius:9px;background:#fff}
 .product-thumb{width:48px;height:48px;object-fit:contain;border-radius:8px;background:#fff;border:1px solid var(--line)}
@@ -78,6 +83,7 @@ footer{text-align:center;color:#94a3b8;font-size:11px;padding:14px}
 <div class="field"><label>Marca</label><input id="editProductBrand" placeholder="Marca"></div>
 <div class="field"><label>Categoria</label><input id="editProductCategory" placeholder="Categoria"></div>
 <div class="field wide"><label>Código de barras</label><input id="editProductBarcode" inputmode="numeric" placeholder="Código de barras"></div>
+<div class="field wide"><button type="button" class="secondary" id="readShelfLabelBtn">📷 Ler etiqueta do supermercado</button><div id="labelScanner" class="hidden"><video id="labelVideo" autoplay playsinline muted></video><div class="scan-actions"><button type="button" id="captureLabelBtn">Capturar e preencher</button><button type="button" class="secondary" id="closeLabelScannerBtn">Fechar câmera</button></div><div id="labelScanStatus" class="muted">Aponte a câmera para a etiqueta e toque em Capturar e preencher.</div></div></div>
 <div class="field wide"><label>Link da foto (URL)</label><input id="editProductImage" placeholder="https://..."></div>
 <div class="field wide"><button type="button" class="secondary" id="searchProductImagesBtn">Buscar fotos na Open Food Facts</button><div id="imageSearchStatus" class="lookup-status muted"></div><div id="imageSearchResults" class="image-results"></div></div>
 </div>
@@ -95,6 +101,7 @@ footer{text-align:center;color:#94a3b8;font-size:11px;padding:14px}
 <footer>Meu Supermercado · Dados sincronizados com segurança na nuvem<br>Pesquisa de produtos: Open Food Facts</footer>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script>
 const SUPABASE_URL='https://vpvdzxspixyhgctirlvv.supabase.co';
 const SUPABASE_KEY='sb_publishable_L4GLK_KXtpwU9BlCUMT6hg_nnpqdem4';
@@ -380,6 +387,94 @@ async function loadHistory(){
  $('priceCompare').innerHTML=entries.length?entries.map(x=>'<div class="row"><div><div class="rowname">'+safe(x.name)+'</div><div class="itemmeta">'+x.prices.length+' registro(s) · menor '+money(Math.min(...x.prices))+'</div></div><strong class="price">'+money(Math.max(...x.prices))+'</strong></div>').join(''):'<p class="muted">Finalize uma compra para começar a comparar preços. O valor à esquerda é o menor e à direita o maior.</p>';
 }
 let stream=null;
+let labelStream=null,labelDetector=null,labelScanLoop=false,lastDetectedLabelCode='';
+function validEan13(code){
+ if(!/^\d{13}$/.test(code))return false;
+ const digits=code.split('').map(Number);
+ const sum=digits.slice(0,12).reduce((total,n,i)=>total+n*(i%2?3:1),0);
+ return (10-(sum%10))%10===digits[12];
+}
+function extractLabelCode(text){
+ const raw=String(text||'');
+ const compact=raw.replace(/\D/g,'');
+ const candidates=compact.match(/\d{13}/g)||[];
+ return candidates.find(validEan13)||candidates[0]||'';
+}
+function extractLabelDescription(text){
+ const lines=String(text||'').split(/\r?\n/).map(x=>x.replace(/[|_~]/g,' ').replace(/\s+/g,' ').trim()).filter(Boolean);
+ const ignored=/^(R\$|PRECO|PREÇO|A PARTIR|A UNIDADE|POR UN|VALIDO|VÁLIDO|OFERTA|TOTAL|QUANTIDADE|QTD|\d+[,.]?\d*\s*(UN|KG|G|ML|L)?)\b/i;
+ const candidate=lines.find(line=>/[A-Za-zÀ-ÿ]{3}/.test(line)&&!ignored.test(line)&&!/^\d[\d\s.,/-]*$/.test(line)&&line.length>=8);
+ return candidate?candidate.replace(/\s{2,}/g,' ').slice(0,100):'';
+}
+async function stopLabelCamera(){
+ labelScanLoop=false;labelDetector=null;
+ if(labelStream){labelStream.getTracks().forEach(t=>t.stop());labelStream=null}
+ $('labelVideo').srcObject=null;$('labelScanner').classList.add('hidden');
+}
+$('readShelfLabelBtn').onclick=async()=>{
+ const panel=$('labelScanner');panel.classList.remove('hidden');
+ $('labelScanStatus').textContent='Abrindo a câmera...';
+ try{
+  if(!navigator.mediaDevices?.getUserMedia)throw new Error('Câmera indisponível neste navegador.');
+  labelStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}},audio:false});
+  $('labelVideo').srcObject=labelStream;await $('labelVideo').play();
+  if('BarcodeDetector'in window){
+   try{labelDetector=new BarcodeDetector({formats:['qr_code','ean_13','ean_8','upc_a','upc_e','code_128']})}catch(e){labelDetector=null}
+  }
+  labelScanLoop=true;
+  $('labelScanStatus').textContent=labelDetector?'Câmera ativa. Aponte para a etiqueta; o código será identificado automaticamente. Depois toque em Capturar e preencher para ler a descrição.':'Câmera ativa. Toque em Capturar e preencher para reconhecer o código e a descrição pela imagem.';
+  const scan=async()=>{
+   if(!labelScanLoop||!labelStream)return;
+   try{
+    if(labelDetector&&$('labelVideo').readyState>=2){
+     const hits=await labelDetector.detect($('labelVideo'));
+     for(const hit of hits){
+      const value=String(hit.rawValue||'');
+      const code=extractLabelCode(value)||(validEan13(value)?value:'');
+      if(code){lastDetectedLabelCode=code;$('editProductBarcode').value=code;$('labelScanStatus').textContent='Código identificado: '+code+'. Agora capture a etiqueta para ler a descrição.';break}
+     }
+    }
+   }catch(e){}
+   if(labelScanLoop)setTimeout(scan,350);
+  };scan();
+ }catch(error){
+  $('labelScanStatus').textContent='Não foi possível abrir a câmera: '+(error.message||error)+' Verifique a permissão e abra o site em HTTPS.';
+ }
+};
+$('captureLabelBtn').onclick=async()=>{
+ const video=$('labelVideo');
+ if(!labelStream||video.readyState<2){$('labelScanStatus').textContent='Aguarde a câmera iniciar.';return}
+ const button=$('captureLabelBtn');button.disabled=true;
+ $('labelScanStatus').textContent='Analisando a etiqueta e reconhecendo os textos...';
+ try{
+  const canvas=document.createElement('canvas'),ctx=canvas.getContext('2d');
+  canvas.width=video.videoWidth;canvas.height=video.videoHeight;ctx.drawImage(video,0,0,canvas.width,canvas.height);
+  let detectedCode=lastDetectedLabelCode;
+  if(labelDetector){
+   try{
+    const hits=await labelDetector.detect(canvas);
+    for(const hit of hits){const value=String(hit.rawValue||'');const code=extractLabelCode(value)||(validEan13(value)?value:'');if(code){detectedCode=code;break}}
+   }catch(e){}
+  }
+  $('labelScanStatus').textContent='Lendo a descrição impressa na etiqueta...';
+  if(!window.Tesseract)throw new Error('O leitor de texto não carregou. Verifique a conexão e tente novamente.');
+  const result=await Tesseract.recognize(canvas,'por');
+  const recognized=result?.data?.text||'';
+  const ocrCode=extractLabelCode(recognized);
+  const code=detectedCode||ocrCode;
+  const description=extractLabelDescription(recognized);
+  if(code)$('editProductBarcode').value=code;
+  if(description)$('editProductName').value=description;
+  if(code||description){
+   $('labelScanStatus').textContent='Leitura concluída! '+(code?'Código: '+code+'. ':'')+(description?'Descrição: '+description+'. ':'')+'Confira os campos antes de salvar.';
+   if(code)$('editProductBarcode').dispatchEvent(new Event('change'));
+  }else{
+   $('labelScanStatus').textContent='Não consegui identificar os dados com segurança. Aproxime a câmera, deixe a etiqueta bem iluminada e tente novamente.';
+  }
+ }catch(error){$('labelScanStatus').textContent='Falha na leitura: '+(error.message||error)}
+ finally{button.disabled=false}
+};
+$('closeLabelScannerBtn').onclick=stopLabelCamera;
 $('scanBtn').onclick=async()=>{
  const box=$('scannerBox');box.classList.toggle('hidden');if(box.classList.contains('hidden')){if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;return}
  if(!('BarcodeDetector'in window)){box.textContent='Este navegador não oferece leitura automática. Digite o código de barras no campo.';return}
