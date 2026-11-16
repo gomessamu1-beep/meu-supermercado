@@ -395,10 +395,13 @@ function validEan13(code){
  return (10-(sum%10))%10===digits[12];
 }
 function extractLabelCode(text){
- const raw=String(text||'');
- const compact=raw.replace(/\D/g,'');
+ const compact=String(text||'').replace(/\D/g,'');
+ for(let i=0;i<=compact.length-13;i++){
+  const candidate=compact.slice(i,i+13);
+  if(validEan13(candidate))return candidate;
+ }
  const candidates=compact.match(/\d{13}/g)||[];
- return candidates.find(validEan13)||candidates[0]||'';
+ return candidates[0]||'';
 }
 function extractLabelDescription(text){
  const lines=String(text||'').split(/\r?\n/).map(x=>x.replace(/[|_~]/g,' ').replace(/\s+/g,' ').trim()).filter(Boolean);
